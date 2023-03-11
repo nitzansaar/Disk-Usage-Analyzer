@@ -82,10 +82,11 @@ int traverse_directory(struct da_options *opts,  char *directory, struct elist *
     while ((entry = readdir(dir)) != NULL) 
     {   
         char *buf = malloc(strlen(directory) + strlen(entry->d_name) + 2);
-        if(strcmp(entry->d_name,".") == 0 || strcmp(entry->d_name,"..") == 0) {
-                free(buf);
-                continue;
-            }
+        if(strcmp(entry->d_name,".") == 0 || strcmp(entry->d_name,"..") == 0) 
+        {
+            free(buf);
+            continue;
+        }
         if (entry->d_type != DT_DIR) 
         {
            
@@ -217,6 +218,5 @@ int main(int argc, char *argv[])
         }
     }
     elist_destroy(list);
-    // free(list);
     return 0;
 }
