@@ -3,12 +3,32 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
-
+#include <dirent.h>
 #include "logger.h"
+#include <string.h>
+#include "elist.h"
+#include <sys/stat.h>
+#include <sys/sysmacros.h>
+#include <time.h>
+ #include <stdint.h>
+ #include "util.h"
+
+struct da_options {
+    bool sort_by_time;
+    unsigned int limit;
+    char *directory;
+};
+
+struct da_options options = { false, 0, "." };
+
+struct FileInfo {
+    const char* fileName;
+    size_t memory;
+    time_t last_accessed;
+};
 
 /* Forward declarations: */
 void print_usage(char *program_name);
-
 
 void print_usage(char *program_name) {
 fprintf(stderr, "Disk Analyzer (da): analyzes disk space usage\n");
@@ -24,20 +44,78 @@ fprintf(stderr, "Options:\n"
 );
 }
 
+int time_comparator(const void *a, const void *b) 
+{
+    struct FileInfo *file_a = (struct FileInfo *) a;
+    struct FileInfo *file_b = (struct FileInfo *) b;
+    if (file_a->last_accessed == file_b->last_accessed) 
+    {
+        return strcmp(file_a->fileName, file_b->fileName);
+    }
+
+    return file_a->last_accessed > file_b->last_accessed;
+}
+
+int size_comparator(const void *a, const void *b) 
+{
+    struct FileInfo *file_a = (struct FileInfo *) a;
+    struct FileInfo *file_b = (struct FileInfo *) b;
+    if (file_a->memory == file_b->memory) 
+    {
+        return strcmp(file_b->fileName, file_a->fileName) * -1;
+    }
+    return file_a->memory < file_b->memory;
+}
+
+int traverse_directory(struct da_options *opts,  char *directory, struct elist *list) 
+{
+    DIR *dir;
+    dir = opendir(directory);
+    if (dir == NULL) 
+    {
+        perror("opendir");
+        return 1;
+    }
+    char *buf;
+    struct dirent *entry;
+
+    while ((entry = readdir(dir)) != NULL) 
+    {
+        if (entry->d_type != DT_DIR) 
+        {
+            buf = malloc(strlen(directory) + strlen(entry->d_name) + 2);
+            struct stat sb;
+            sprintf(buf, "%s/%s", directory, entry->d_name);
+            stat(buf, &sb);
+            // struct FileInfo *file = malloc(sizeof(struct FileInfo));
+            struct FileInfo file = {buf, (intmax_t) sb.st_size, sb.st_atime}; 
+            // file->fileName = buf;
+            // file->memory = (intmax_t) sb.st_size;
+            // file->last_accessed = sb.st_atime;
+            elist_add(list, &file);
+            // free(file);
+            // free(buf);
+
+
+        } 
+        else if (strcmp(entry->d_name, ".") != 0 && strcmp(entry->d_name, "..") != 0) 
+        {
+            buf = malloc(strlen(directory) + strlen(entry->d_name) + 2);
+            sprintf(buf, "%s/%s", directory, entry->d_name);
+            traverse_directory(opts, buf, list);
+            free(buf);
+        }
+    }
+    
+    closedir(dir);
+    return 0;
+}
+
+
 int main(int argc, char *argv[])
 {
-    /* Create a struct to hold program options and initialize it by declaring an
-     * 'options' variable. Defaults:
-     *      - sort by size (time=false)
-     *      - limit of 0 (unlimited)
-     *      - directory = '.' (current directory) */
-    struct da_options {
-        bool sort_by_time;
-        unsigned int limit;
-        char *directory;
-    } options
-        = { false, 0, "." };
-
+    struct da_options opts;
+    opts = options;
     int c;
     opterr = 0;
     while ((c = getopt(argc, argv, "ahl:s")) != -1) {
@@ -91,13 +169,47 @@ int main(int argc, char *argv[])
             options.limit);
     LOG("Directory to analyze: [%s]\n", options.directory);
 
-    /* TODO:
-     *  - check to ensure the directory actually exists
-     *  - create a new 'elist' data structure
-     *  - traverse the directory and store entries in the list
-     *  - sort the list (either by size or time)
-     *  - print formatted list
-     */
+    struct elist *list = elist_create(10, sizeof(struct FileInfo));
 
+    traverse_directory(&opts, options.directory, list);
+
+    if (options.sort_by_time == true) 
+    {
+        elist_sort(list, time_comparator);
+    }
+    else 
+    {
+        elist_sort(list, size_comparator);
+    }
+    if (options.limit > 0) 
+    {
+        int i = options.limit - 1;
+        while (i >= 0) 
+        {
+            struct FileInfo *file = elist_get(list, i);
+            char size_buf[20];
+            human_readable_size(size_buf, sizeof(size_buf), file->memory, 1);
+            char date_buf[30];
+            simple_time_format(date_buf, sizeof(date_buf), file->last_accessed);
+            printf("%10s | %11s | %s\n", size_buf, date_buf, file->fileName);
+            i--;
+        }
+    }
+    else 
+    {   
+        int i = elist_size(list) - 1;
+        while (i >= 0) 
+        {
+            struct FileInfo *file = elist_get(list, i);
+            char size_buf[20];
+            human_readable_size(size_buf, sizeof(size_buf), file->memory, 1);
+            char date_buf[30];
+            simple_time_format(date_buf, sizeof(date_buf), file->last_accessed);
+            printf("%10s | %11s | %s\n", size_buf, date_buf, file->fileName);
+            i--;
+        }
+    }
+    // elist_destroy(list);
+    // free(list);
     return 0;
 }

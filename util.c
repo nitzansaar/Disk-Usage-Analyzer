@@ -1,5 +1,4 @@
 #include "util.h"
-
 #include <stdio.h>
 #include <time.h>
 
@@ -15,13 +14,18 @@
 */
 void human_readable_size(char *buf, size_t buf_sz, double size, unsigned int decimal_place)
 {
-    // TODO: given a size in bytes, convert it to a human readable size (e.g.,
-    // 1024 KiB == 1 MiB).
-    //
-    // Important: we are *NOT* using SI units. In other words:
-    //   1000 KB  = 1 MB     <---- no!
-    //   1024 KiB = 1 MiB    <---- this is what we want
+    const char *units[] = {"B", "KiB", "MiB", "GiB", "TiB", "PiB", "EiB", "ZiB"};
+    int unit_index = 0;
+    while (size >= 1024 && unit_index < sizeof(units) / sizeof(units[0]) - 1) {
+        size /= 1024;
+        unit_index++;
+    }
+    char format_string[11];
+    snprintf(format_string, sizeof(format_string), "%%.%df %%s", (int)decimal_place);
+    snprintf(buf, buf_sz, format_string, size, units[unit_index]);
+
 }
+
 
 /**
  * Given a UNIX timestamp, this function converts it to a human-readable string.
@@ -33,5 +37,6 @@ void human_readable_size(char *buf, size_t buf_sz, double size, unsigned int dec
 */
 size_t simple_time_format(char *buf, size_t buf_sz, time_t time)
 {
-    return 0;
+  struct tm *tmp = localtime(&time);
+  return strftime(buf, buf_sz, "%b %d %Y", tmp);
 }
