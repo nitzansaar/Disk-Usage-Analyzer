@@ -22,7 +22,7 @@ struct da_options {
 struct da_options options = { false, 0, "." };
 
 struct FileInfo {
-    const char* fileName;
+    char fileName[100];
     size_t memory;
     time_t last_accessed;
 };
@@ -76,36 +76,43 @@ int traverse_directory(struct da_options *opts,  char *directory, struct elist *
         perror("opendir");
         return 1;
     }
-    char *buf;
+    
     struct dirent *entry;
 
     while ((entry = readdir(dir)) != NULL) 
-    {
+    {   
+        char *buf = malloc(strlen(directory) + strlen(entry->d_name) + 2);
+        if(strcmp(entry->d_name,".") == 0 || strcmp(entry->d_name,"..") == 0) {
+                free(buf);
+                continue;
+            }
         if (entry->d_type != DT_DIR) 
         {
-            buf = malloc(strlen(directory) + strlen(entry->d_name) + 2);
+           
             struct stat sb;
             sprintf(buf, "%s/%s", directory, entry->d_name);
             stat(buf, &sb);
-            // struct FileInfo *file = malloc(sizeof(struct FileInfo));
-            struct FileInfo file = {buf, (intmax_t) sb.st_size, sb.st_atime}; 
-            // file->fileName = buf;
-            // file->memory = (intmax_t) sb.st_size;
-            // file->last_accessed = sb.st_atime;
-            elist_add(list, &file);
-            // free(file);
-            // free(buf);
+            
+            struct FileInfo * file = malloc(sizeof(struct FileInfo)); 
+            memcpy(file->fileName, buf, sizeof(*buf) + 80);
+            file->memory = sb.st_size; 
+            file->last_accessed = sb.st_atime;
+
+            elist_add(list, file);
+            free(file);
 
 
         } 
         else if (strcmp(entry->d_name, ".") != 0 && strcmp(entry->d_name, "..") != 0) 
         {
-            buf = malloc(strlen(directory) + strlen(entry->d_name) + 2);
+            //buf = malloc(strlen(directory) + strlen(entry->d_name) + 2);
             sprintf(buf, "%s/%s", directory, entry->d_name);
             traverse_directory(opts, buf, list);
-            free(buf);
+            
         }
+        free(buf);
     }
+  
     
     closedir(dir);
     return 0;
@@ -209,7 +216,7 @@ int main(int argc, char *argv[])
             i--;
         }
     }
-    // elist_destroy(list);
+    elist_destroy(list);
     // free(list);
     return 0;
 }
